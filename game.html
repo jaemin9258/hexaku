@@ -264,44 +264,54 @@
 
   /* ══ 가로 화면 전용 배치 (PC + 모바일 가로) ══
      맨 끝에 두어야 앞의 기본 규칙을 확실히 덮어쓴다 */
+  /* PC 전용 배치는 순수 미디어쿼리가 아니라 html.pc-layout 클래스로 게이트한다.
+     iframe 안에서는 자기 상자의 가로세로비가 바깥 창과 달라서, 미디어쿼리만 쓰면
+     같은 파일이 여는 방식에 따라 다른 레이아웃으로 갈리는 문제가 생긴다. */
   @media (min-aspect-ratio:1.15/1) and (min-width:640px){
-    .wrap{max-width:none;display:block;position:relative;
+    html.pc-layout .wrap{max-width:none;display:block;position:relative;
       height:100dvh;height:100vh;padding:0;overflow:hidden}
-    .side{display:contents}
+    html.pc-layout .side{display:contents}
 
-    header{position:absolute;top:clamp(12px,2.2vh,24px);left:clamp(18px,2.4vw,40px);
+    html.pc-layout header{position:absolute;top:clamp(12px,2.2vh,24px);left:clamp(18px,2.4vw,40px);
       right:clamp(18px,2.4vw,40px);z-index:6;border-bottom:none;padding-bottom:0;
       align-items:flex-start}
-    .brand h1{font-size:clamp(22px,3vw,44px)}
-    .sc-val{font-size:clamp(18px,2.1vw,30px)}
-    .hud{position:absolute;top:clamp(52px,8vh,92px);right:clamp(18px,2.4vw,40px);
+    html.pc-layout .brand h1{font-size:clamp(22px,3vw,44px)}
+    html.pc-layout .sc-val{font-size:clamp(18px,2.1vw,30px)}
+    html.pc-layout .hud{position:absolute;top:clamp(52px,8vh,92px);right:clamp(18px,2.4vw,40px);
       z-index:6;justify-content:flex-end;height:auto}
 
     /* 게임판: 정중앙, 화면에 비례한 적당한 크기 */
-    .stage{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);
+    html.pc-layout .stage{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);
       height:min(64vh,600px);aspect-ratio:503/456;width:auto;min-height:0}
 
     /* 지우개: 왼쪽 세로, 블록보다 작게 */
-    .stash{position:absolute;left:clamp(16px,2.2vw,40px);top:50%;
+    html.pc-layout .stash{position:absolute;left:clamp(16px,2.2vw,40px);top:50%;
       transform:translateY(-50%);flex-direction:column;gap:clamp(6px,1.2vh,12px);
       align-items:center;min-height:0;z-index:5}
-    .stash .cap{margin:0 0 4px 0;text-align:center}
-    .stash .tok{width:clamp(34px,3.2vw,52px);height:clamp(38px,3.6vw,56px)}
+    html.pc-layout .stash .cap{margin:0 0 4px 0;text-align:center}
+    html.pc-layout .stash .tok{width:clamp(34px,3.2vw,52px);height:clamp(38px,3.6vw,56px)}
 
     /* 블록: 오른쪽 세로 3칸, 크게 */
-    .tray{position:absolute;right:clamp(16px,2.2vw,40px);top:50%;
+    html.pc-layout .tray{position:absolute;right:clamp(16px,2.2vw,40px);top:50%;
       transform:translateY(-50%);display:grid;
       grid-template-columns:1fr;grid-auto-rows:1fr;gap:clamp(8px,1.6vh,18px);
       width:clamp(120px,15vw,230px);height:min(76vh,700px);
       border-top:none;padding-top:0;z-index:5}
-    .slot{height:auto;min-height:0}
+    html.pc-layout .slot{height:auto;min-height:0}
 
     /* 메뉴는 왼쪽 아래, 도움말은 오른쪽 아래 */
-    .bar{position:absolute;left:clamp(18px,2.4vw,40px);right:clamp(18px,2.4vw,40px);
+    html.pc-layout .bar{position:absolute;left:clamp(18px,2.4vw,40px);right:clamp(18px,2.4vw,40px);
       bottom:clamp(14px,2.4vh,26px);z-index:6}
   }
 
-  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  /* 애니메이션을 완전히 죽이면 점수·콤보·블록 클리어 피드백이 전부 사라져
+     먹통처럼 보인다. 그래서 없애는 대신 거의 순식간으로 줄여서, 큰 움직임으로
+     인한 어지러움은 막으면서 무슨 일이 일어났는지는 계속 보이게 한다. */
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.05s!important;animation-iteration-count:1!important;
+      transition-duration:.05s!important}
+    .slot.item svg, .slot.t3{animation:none!important}
+  }
 </style>
 
 <div class="wrap">
@@ -753,7 +763,10 @@ document.addEventListener('pointerup', reviveAudio);
 let relayoutT=null;
 function relayout(){
   clearTimeout(relayoutT);
-  relayoutT=setTimeout(()=>{ if (!drag && !locked){ drawTray(); drawStash(); } }, 120);
+  relayoutT=setTimeout(()=>{
+    syncPcLayout();
+    if (!drag && !locked){ drawTray(); drawStash(); }
+  }, 120);
 }
 window.addEventListener('resize', relayout);
 window.addEventListener('orientationchange', relayout);
@@ -1048,7 +1061,20 @@ function itemTargets(kind,aq,ar){
 
 const wideMQ = (typeof window!=='undefined' && window.matchMedia)
   ? window.matchMedia('(min-aspect-ratio:1.15/1) and (min-width:640px)') : null;
-const wide = ()=> { try { return !!(wideMQ && wideMQ.matches); } catch(_){ return false; } };
+// iframe 안에서는 바깥 창 크기와 무관하게 embed 자체의 작은 상자를 기준으로
+// 가로세로비를 재기 때문에, 독립 탭으로 열었을 때와 다른 레이아웃이 튈 수 있다.
+// 그래서 iframe 안에서는 항상 기본(모바일형) 레이아웃을 쓰고, PC 전용 레이아웃은
+// 이 파일을 최상위 탭에서 직접 열었을 때만 화면 비율로 판단한다.
+const inIframe = (()=>{ try { return typeof window!=='undefined' && window.self !== window.top; } catch(_){ return true; } })();
+const wide = ()=> { try { return !inIframe && !!(wideMQ && wideMQ.matches); } catch(_){ return false; } };
+function syncPcLayout(){
+  try { document.documentElement.classList.toggle('pc-layout', wide()); } catch(_){}
+}
+if (wideMQ){
+  try { wideMQ.addEventListener('change', syncPcLayout); }
+  catch(_){ try { wideMQ.addListener(syncPcLayout); } catch(__){} }
+}
+syncPcLayout();
 const trayScale = ()=> wide() ? 1.20 : .40;
 const itemScale = ()=> wide() ? 1.9 : .94;
 
